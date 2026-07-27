@@ -1,0 +1,158 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "LiveCode API",
+    "version": "1.0.0",
+    "description": "Production-grade REST & Real-time API specification for LiveCode AI technical interview platform."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000/api/v1",
+      "description": "Local Development Server (v1)"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check endpoint",
+        "responses": {
+          "200": {
+            "description": "Server status operational"
+          }
+        }
+      }
+    },
+    "/auth/exchange": {
+      "post": {
+        "summary": "Exchange short-lived OAuth authorization code for JWT access token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": { "type": "string" }
+                },
+                "required": ["code"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Returns access token" },
+          "401": { "description": "Invalid or expired authorization code" }
+        }
+      }
+    },
+    "/rooms/create": {
+      "post": {
+        "summary": "Create a new interview room",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "mode": { "type": "string", "enum": ["LIVE", "MOCK", "REAL"], "default": "LIVE" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Room created successfully" }
+        }
+      }
+    },
+    "/rooms/join": {
+      "post": {
+        "summary": "Join an existing interview room",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "roomId": { "type": "string" }
+                },
+                "required": ["roomId"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Joined room successfully" },
+          "404": { "description": "Room not found or ended" }
+        }
+      }
+    },
+    "/code/execute": {
+      "post": {
+        "summary": "Execute code via Judge0 execution engine",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": { "type": "string" },
+                  "languageId": { "type": "integer" },
+                  "stdin": { "type": "string" }
+                },
+                "required": ["code", "languageId"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Execution output returned" }
+        }
+      }
+    },
+    "/ai/hint": {
+      "post": {
+        "summary": "Stream AI coding hint via SSE (Server-Sent Events)",
+        "responses": {
+          "200": { "description": "SSE text stream" }
+        }
+      }
+    },
+    "/reports/{sessionId}": {
+      "get": {
+        "summary": "Fetch interview performance evaluation report",
+        "parameters": [
+          { "name": "sessionId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Report details returned" },
+          "403": { "description": "Unauthorized access" }
+        }
+      }
+    },
+    "/problems": {
+      "get": {
+        "summary": "List all custom interview problems",
+        "responses": {
+          "200": { "description": "Array of problems" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  INTERVIEWER
+  CANDIDATE
+}
+
+enum RoomMode {
+  LIVE
+  MOCK
+  REAL
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  avatar       String?
+  refreshToken String?
+  role         Role     @default(CANDIDATE)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  roomsCreated Room[]    @relation("CreatedBy")
+  sessions     Session[]
+
+  @@index([email])
+}
+
+model Room {
+  id        String   @id @default(cuid())
+  createdBy User     @relation("CreatedBy", fields: [userId], references: [id])
+  userId    String
+  mode      RoomMode @default(LIVE)
+  problem   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions Session[]
+
+  @@index([userId])
+}
+
+model Session {
+  id        String    @id @default(cuid())
+  room      Room      @relation(fields: [roomId], references: [id])
+  roomId    String
+  candidate User      @relation(fields: [userId], references: [id])
+  userId    String
+  startTime DateTime  @default(now())
+  endTime   DateTime?
+
+  report Report?
+
+  @@index([roomId])
+  @@index([userId])
+  @@index([userId, startTime(sort: Desc)])
+}
+
+model Report {
+  id                  String   @id @default(cuid())
+  session             Session  @relation(fields: [sessionId], references: [id])
+  sessionId           String   @unique
+  codeScore           Int?
+  communicationScore  Int?
+  problemSolvingScore Int?
+  fillerWords         Int?
+  transcript          String?
+  approach            String?
+  verdict             String?
+  tips                String?
+  strengths           String[] @default([])
+  weaknesses          String[] @default([])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model Problem {
+  id          String     @id @default(cuid())
+  title       String     @unique
+  difficulty  Difficulty @default(MEDIUM)
+  description String
+  examples    Json
+  constraints String[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([difficulty])
+}
