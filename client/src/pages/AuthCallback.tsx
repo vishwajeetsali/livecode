@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { setCredentials } from "../features/auth/authSlice";
@@ -9,20 +9,26 @@ const AuthCallback = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const dispatch = useDispatch();
+    const exchanged = useRef(false);
 
     useEffect(() => {
+        if (exchanged.current) return;
+        exchanged.current = true;
+
         const handleAuth = async () => {
             const code = searchParams.get("code");
             const tokenParam = searchParams.get("token");
 
             let token = tokenParam;
+            let isNewUser = false;
 
             if (code) {
                 try {
                     const res = await api.post("/auth/exchange", { code });
                     token = res.data.accessToken;
+                    isNewUser = res.data.isNewUser ?? false;
                 } catch {
-                    navigate("/login");
+                    navigate("/");
                     return;
                 }
             }
@@ -42,7 +48,11 @@ const AuthCallback = () => {
                     },
                     accessToken: token,
                 }));
-                navigate("/dashboard");
+
+                navigate(isNewUser ? "/role-select" : "/dashboard");
+            } else {
+                // No code or token — nothing to exchange, redirect to home
+                navigate("/");
             }
         };
 
@@ -53,4 +63,4 @@ const AuthCallback = () => {
     return <div className="min-h-screen bg-[#0a0a0f] text-white flex items-center justify-center">Logging in...</div>;
 };
 
-export default AuthCallback;
+export default AuthCallback;

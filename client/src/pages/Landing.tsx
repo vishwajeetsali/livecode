@@ -6,13 +6,14 @@ const Landing = () => {
         <div className="min-h-screen bg-[var(--bg-deep)] text-white overflow-hidden animate-page-fade">
 
             {/* Ambient glow */}
-            <div className="fixed top-[-200px] left-[-200px] w-[600px] h-[600px] bg-green-500/[0.07] rounded-full blur-[150px] pointer-events-none" />
-            <div className="fixed bottom-[-200px] right-[-200px] w-[500px] h-[500px] bg-emerald-500/[0.05] rounded-full blur-[150px] pointer-events-none" />
+            <div className="fixed top-[-200px] left-[-200px] w-[600px] h-[600px] bg-green-500/[0.07] rounded-full blur-[150px] pointer-events-none" aria-hidden="true" />
+            <div className="fixed bottom-[-200px] right-[-200px] w-[500px] h-[500px] bg-emerald-500/[0.05] rounded-full blur-[150px] pointer-events-none" aria-hidden="true" />
 
             <Navbar />
 
+            <main id="main-content">
             {/* ─── Hero ───────────────────────────────────────────────────────── */}
-            <section className="relative flex flex-col items-center justify-center text-center pt-28 pb-20 px-4">
+            <section className="relative flex flex-col items-center justify-center text-center pt-28 pb-20 px-4" aria-labelledby="hero-title">
 
                 {/* Badge */}
                 <div className="flex items-center gap-2 bg-[var(--accent)]/10 border border-[var(--accent)]/20 text-[var(--accent)] text-[11px] px-4 py-1.5 rounded-full mb-8 tracking-[0.15em] uppercase font-medium">
@@ -21,7 +22,7 @@ const Landing = () => {
                 </div>
 
                 {/* Title */}
-                <h1 className="text-6xl md:text-7xl font-black mb-6 leading-[1.05] tracking-tighter max-w-4xl">
+                <h1 id="hero-title" className="text-6xl md:text-7xl font-black mb-6 leading-[1.05] tracking-tighter max-w-4xl">
                     Ace Your Next<br />
                     <span className="bg-gradient-to-r from-green-400 via-emerald-300 to-green-500 bg-clip-text text-transparent">
                         Technical Interview
@@ -34,11 +35,14 @@ const Landing = () => {
                 </p>
 
                 {/* CTA */}
-                <div className="flex gap-4">
-                    <a href={`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/auth/google`}>
-                        <button className="btn btn-primary btn-lg">
-                            Start Free →
-                        </button>
+                <div className="flex gap-4" role="group" aria-label="Get started">
+                    <a
+                        href={`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/auth/google`}
+                        className="btn btn-primary btn-lg no-underline"
+                        role="button"
+                        aria-label="Start Free"
+                    >
+                        Start Free →
                     </a>
                     <button
                         onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })}
@@ -61,7 +65,7 @@ const Landing = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
                     {/* Connecting line (desktop) */}
-                    <div className="hidden md:block absolute top-10 left-[20%] right-[20%] h-px border-t border-dashed border-white/10" />
+                    <div className="hidden md:block absolute top-10 left-[20%] right-[20%] h-px border-t border-dashed border-white/10" aria-hidden="true" />
 
                     {[
                         { step: "01", icon: "🚀", title: "Create or Join", desc: "Start an interview room in one click, or join with a shared room ID." },
@@ -98,6 +102,7 @@ const Landing = () => {
                     Built with React, Node.js, Socket.IO, and AI
                 </p>
             </footer>
+            </main>
         </div>
     );
 };

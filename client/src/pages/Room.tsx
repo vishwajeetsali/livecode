@@ -1,17 +1,31 @@
 import { useParams, useNavigate } from "react-router-dom";
 import Editor from "@monaco-editor/react";
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import socket from "../utils/socket";
 import api from "../utils/api";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import type { RootState } from "../app/store";
-import { LANGUAGES, langMap, getSupportedMimeType, formatTime } from "../utils/helper.js";
+import { resetToBaseRole } from "../features/auth/authSlice";
+import { LANGUAGES, langMap } from "../utils/helper.js";
 import toast from "react-hot-toast";
 import type { User, Problem } from "../types";
 import type * as monaco from "monaco-editor";
 import TopBar from "../components/room/TopBar";
 import VideoPanel from "../components/room/VideoPanel";
 import ChatPanel from "../components/room/ChatPanel";
+import ProblemPanel from "../components/room/ProblemPanel";
+import ConsolePanel from "../components/room/ConsolePanel";
+import { useRoomSocket } from "../hooks/useRoomSocket";
+import { useWebRTC } from "../hooks/useWebRTC";
+import { useAudioRecorder } from "../hooks/useAudioRecorder";
+import { useResizablePanels } from "../hooks/useResizablePanels";
+import { useCodeExecution } from "../hooks/useCodeExecution";
+import { useCodeReview } from "../hooks/useCodeReview";
+import { useTimer } from "../hooks/useTimer";
+import { getStarterCode, isStarterCode } from "../utils/starterCode";
+import { useYjsCollaboration } from "../hooks/useYjsCollaboration";
+import { useNotifications } from "../features/notifications";
+import { useTheme } from "../features/theme";
 
 interface CursorState {
     user: User;
@@ -29,18 +43,28 @@ interface ChatMessage {
 const Room = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const dispatch = useDispatch();
     const user = useSelector((state: RootState) => state.auth.user);
     const isInterviewer = user?.role === "INTERVIEWER";
 
+    useEffect(() => {
+        return () => {
+            dispatch(resetToBaseRole());
+        };
+    }, [dispatch]);
+
     // ─── Editor & Execution State ────────────────────────────────────────────
-    const [code, setCode] = useState("// Start coding here...");
-    const [output, setOutput] = useState("");
     const [langId, setLangId] = useState(63);
     const [language, setLanguage] = useState("javascript");
-    const [loadingRun, setLoadingRun] = useState(false);
     const [loadingEnd, setLoadingEnd] = useState(false);
+    const endingRef = useRef(false);
     const [stdin, setStdin] = useState("");
     const [consoleTab, setConsoleTab] = useState<"output" | "stdin">("output");
+    const { output, testResults, loadingRun, runCount, executeCode } = useCodeExecution();
+    const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+    const monacoRef = useRef<typeof monaco | null>(null);
+    const { requestReview, clearReview, loading: loadingReview, hasReview } = useCodeReview(editorRef, monacoRef);
+    const { bindEditor, getText, setText, synced } = useYjsCollaboration({ roomId: id });
 
     // ─── Problem State ───────────────────────────────────────────────────────
     const [problem, setProblem] = useState("Two Sum");
@@ -48,198 +72,77 @@ const Room = () => {
     const [showDescription, setShowDescription] = useState(true);
     const [showProblemPicker, setShowProblemPicker] = useState(false);
     const selectedProblem = problems.find((p) => p.title === problem) || null;
+    const activeProblemTitle = selectedProblem?.title || problem || "Two Sum";
+
+    useEffect(() => {
+        if (isInterviewer && activeProblemTitle && synced) {
+            const currentVal = getText();
+            if (!currentVal.trim()) {
+                const starter = getStarterCode(activeProblemTitle, language);
+                setText(starter);
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isInterviewer, activeProblemTitle, synced]);
 
     // ─── Layout Resize State ─────────────────────────────────────────────────
-    const [problemWidth, setProblemWidth] = useState(384);
-    const [rightWidth, setRightWidth] = useState(300);
-    const [consoleHeight, setConsoleHeight] = useState(128);
-    const activeResizeRef = useRef<"problem" | "right" | "console" | null>(null);
-    const problemWidthRef = useRef(384);
-    const rightWidthRef = useRef(300);
-    const consoleHeightRef = useRef(128);
+    const { problemWidth, rightWidth, consoleHeight, startResize } = useResizablePanels();
 
     // ─── Room & Collaboration State ──────────────────────────────────────────
     const [roomValid, setRoomValid] = useState(true);
-    const [elapsed, setElapsed] = useState(0);
+    const [roomCreatedAt, setRoomCreatedAt] = useState<string | null>(null);
+    const { elapsed } = useTimer(roomValid, roomCreatedAt);
     const [participants, setParticipants] = useState<User[]>([]);
     const [otherCursors, setOtherCursors] = useState<Record<string, CursorState>>({});
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [newMessage, setNewMessage] = useState("");
-    const [cameraAllowed, setCameraAllowed] = useState(true);
 
-    // ─── Refs ────────────────────────────────────────────────────────────────
-    const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
-    const monacoRef = useRef<typeof monaco | null>(null);
-    const decorationIdsRef = useRef<string[]>([]);
-    const localVideoRef = useRef<HTMLVideoElement>(null);
-    const remoteVideoRef = useRef<HTMLVideoElement>(null);
-    const peerRef = useRef<RTCPeerConnection | null>(null);
-    const localStreamRef = useRef<MediaStream | null>(null);
-    const recorderRef = useRef<MediaRecorder | null>(null);
-    const chunksRef = useRef<Blob[]>([]);
-    const mimeTypeRef = useRef<string>("audio/webm");
-    const audioCtxRef = useRef<AudioContext | null>(null);
-    const mixDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
-    const remoteSourceAddedRef = useRef(false);
+    // Prevent accidental tab closure or navigation during live room
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (roomValid) {
+                e.preventDefault();
+                e.returnValue = "";
+            }
+        };
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => {
+            window.removeEventListener("beforeunload", handleBeforeUnload);
+        };
+    }, [roomValid]);
 
-    // ─── Audio Recorder ──────────────────────────────────────────────────────
-    const startMixedRecorder = () => {
-        if (!isInterviewer || !mixDestRef.current) return;
-        if (recorderRef.current && recorderRef.current.state !== "inactive") {
-            recorderRef.current.stop();
+    // ─── Hooks ──────────────────────────────────────────────────────────────
+    const { recorderRef, chunksRef, mimeTypeRef, startMixedRecorder, addRemoteStream } = useAudioRecorder("mixed", true);
+
+    const { addNotification } = useNotifications();
+    const { resolvedTheme } = useTheme();
+
+    useRoomSocket({
+        roomId: id, user, navigate, setProblem, setRoomValid, setProblems, setLanguage, setLangId, setParticipants, setOtherCursors, setMessages, addNotification, setRoomCreatedAt
+    });
+
+    const handleRemoteStream = useCallback((stream: MediaStream) => {
+        if (isInterviewer) {
+            addRemoteStream(stream);
         }
-        const mimeType = getSupportedMimeType();
-        mimeTypeRef.current = mimeType || "audio/webm";
-        const recorder = mimeType
-            ? new MediaRecorder(mixDestRef.current.stream, { mimeType })
-            : new MediaRecorder(mixDestRef.current.stream);
-        recorderRef.current = recorder;
-        recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-        recorder.start();
-    };
+    }, [isInterviewer, addRemoteStream]);
 
-    // ─── Resize Handlers ─────────────────────────────────────────────────────
-    useEffect(() => {
-        const onMove = (e: MouseEvent) => {
-            if (!activeResizeRef.current) return;
-            if (activeResizeRef.current === "problem") {
-                const w = Math.max(200, Math.min(600, e.clientX));
-                problemWidthRef.current = w;
-                setProblemWidth(w);
-            } else if (activeResizeRef.current === "right") {
-                const w = Math.max(200, Math.min(500, window.innerWidth - e.clientX));
-                rightWidthRef.current = w;
-                setRightWidth(w);
-            } else if (activeResizeRef.current === "console") {
-                const editorPanel = document.getElementById("editor-center-panel");
-                if (!editorPanel) return;
-                const rect = editorPanel.getBoundingClientRect();
-                const h = Math.max(60, Math.min(450, rect.bottom - e.clientY));
-                consoleHeightRef.current = h;
-                setConsoleHeight(h);
-            }
-        };
-        const onUp = () => { activeResizeRef.current = null; };
-        window.addEventListener("mousemove", onMove);
-        window.addEventListener("mouseup", onUp);
-        return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
-    }, []);
+    const handleLocalStream = useCallback((stream: MediaStream) => {
+        if (isInterviewer) {
+            startMixedRecorder(stream);
+        }
+    }, [isInterviewer, startMixedRecorder]);
 
-    // ─── Socket + Room Init ──────────────────────────────────────────────────
-    useEffect(() => {
-        const checkRoom = async () => {
-            try {
-                const res = await api.get(`/rooms/${id}`);
-                setProblem(res.data.problem || "Two Sum");
-            } catch { setRoomValid(false); }
-        };
-        const fetchProblems = async () => {
-            try { const res = await api.get("/problems"); setProblems(res.data); }
-            catch { toast.error("Failed to load problems."); }
-        };
+    const { localVideoRef, remoteVideoRef, cameraAllowed, remoteConnected, remoteHasVideo } = useWebRTC({
+        roomId: id,
+        isInterviewer,
+        socket,
+        onLocalStream: handleLocalStream,
+        onRemoteStream: handleRemoteStream
+    });
 
-        checkRoom();
-        fetchProblems();
-        socket.emit("joinRoom", { roomId: id, user });
 
-        socket.on("codeUpdate", (newCode: string) => setCode(newCode));
-        socket.on("sessionEnded", () => navigate("/dashboard"));
-        socket.on("languageChange", (lang: string) => { setLanguage(lang); setLangId(langMap[lang]); });
-        socket.on("problemChange", (newProblem: string) => setProblem(newProblem));
-        socket.on("presenceUpdate", (users: User[]) => {
-            setParticipants(users);
-            setOtherCursors((prev) => {
-                const next = { ...prev };
-                Object.keys(next).forEach((uid) => { if (!users.some((u) => u.id === uid)) delete next[uid]; });
-                return next;
-            });
-        });
-        socket.on("cursorUpdate", ({ user: cursorUser, position }: { user: User; position: { lineNumber: number; column: number } }) => {
-            if (cursorUser.id !== user?.id) {
-                setOtherCursors((prev) => ({ ...prev, [cursorUser.id]: { user: cursorUser, position } }));
-            }
-        });
-        socket.on("receiveMessage", (msg: ChatMessage) => setMessages((prev) => [...prev, msg]));
-
-        return () => {
-            socket.off("codeUpdate"); socket.off("sessionEnded"); socket.off("languageChange");
-            socket.off("problemChange"); socket.off("presenceUpdate"); socket.off("cursorUpdate"); socket.off("receiveMessage");
-        };
-    }, [id, navigate, user]);
-
-    // ─── WebRTC ──────────────────────────────────────────────────────────────
-    useEffect(() => {
-        const startVideo = async () => {
-            try {
-                let stream: MediaStream;
-                try { stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); }
-                catch { stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true }); setCameraAllowed(false); }
-
-                localStreamRef.current = stream;
-                if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-
-                const peer = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
-                peerRef.current = peer;
-                stream.getTracks().forEach(track => peer.addTrack(track, stream));
-
-                if (isInterviewer) {
-                    const audioCtx = new AudioContext();
-                    audioCtxRef.current = audioCtx;
-                    const mixDest = audioCtx.createMediaStreamDestination();
-                    mixDestRef.current = mixDest;
-                    const localAudioOnly = new MediaStream(stream.getAudioTracks());
-                    audioCtx.createMediaStreamSource(localAudioOnly).connect(mixDest);
-                    startMixedRecorder();
-                }
-
-                peer.ontrack = (e) => {
-                    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = e.streams[0];
-                    if (isInterviewer && audioCtxRef.current && mixDestRef.current && !remoteSourceAddedRef.current) {
-                        const remoteAudioTracks = e.streams[0].getAudioTracks();
-                        if (remoteAudioTracks.length > 0) {
-                            remoteSourceAddedRef.current = true;
-                            const remoteAudioOnly = new MediaStream(remoteAudioTracks);
-                            audioCtxRef.current.createMediaStreamSource(remoteAudioOnly).connect(mixDestRef.current);
-                        }
-                    }
-                };
-
-                peer.onicecandidate = (e) => { if (e.candidate) socket.emit("iceCandidate", { roomId: id, candidate: e.candidate }); };
-
-                if (isInterviewer) {
-                    socket.on("candidateReady", async () => {
-                        const offer = await peer.createOffer();
-                        await peer.setLocalDescription(offer);
-                        socket.emit("offer", { roomId: id, offer });
-                    });
-                } else {
-                    socket.emit("candidateReady", { roomId: id });
-                }
-
-                socket.on("offer", async (offer) => { await peer.setRemoteDescription(offer); const answer = await peer.createAnswer(); await peer.setLocalDescription(answer); socket.emit("answer", { roomId: id, answer }); });
-                socket.on("answer", async (answer) => { await peer.setRemoteDescription(answer); });
-                socket.on("iceCandidate", async (candidate) => { await peer.addIceCandidate(candidate); });
-            } catch (err) {
-                setCameraAllowed(false);
-                toast.error("Camera/microphone unavailable.");
-                console.warn("Camera unavailable:", err);
-            }
-        };
-        startVideo();
-        return () => {
-            localStreamRef.current?.getTracks().forEach(t => t.stop());
-            peerRef.current?.close();
-            if (recorderRef.current && recorderRef.current.state !== "inactive") recorderRef.current.stop();
-            audioCtxRef.current?.close();
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isInterviewer, id]);
-
-    // ─── Timer ───────────────────────────────────────────────────────────────
-    useEffect(() => {
-        const timer = setInterval(() => setElapsed(e => e + 1), 1000);
-        return () => clearInterval(timer);
-    }, []);
+    const decorationCollectionRef = useRef<monaco.editor.IEditorDecorationsCollection | null>(null);
 
     // ─── Remote Cursor Decorations ───────────────────────────────────────────
     useEffect(() => {
@@ -253,30 +156,36 @@ const Room = () => {
                 hoverMessage: { value: `${cursorUser.name || "Collaborator"} (${cursorUser.role})` },
             },
         }));
-        decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, decorations);
+        if (!decorationCollectionRef.current) {
+            decorationCollectionRef.current = editor.createDecorationsCollection(decorations);
+        } else {
+            decorationCollectionRef.current.set(decorations);
+        }
     }, [otherCursors]);
 
-    const [runCount, setRunCount] = useState(0);
-
     // ─── Handlers ────────────────────────────────────────────────────────────
-    const handleRun = async () => {
-        try {
-            setLoadingRun(true);
-            setRunCount((prev) => prev + 1);
-            const res = await api.post("/code/execute", { code, languageId: langId, stdin });
-            setOutput(res.data.output || "No output");
-            setConsoleTab("output");
-        } catch { toast.error("Code execution failed."); }
-        finally { setLoadingRun(false); }
-    };
+    const handleRun = useCallback(async () => {
+        const currentCode = getText();
+        await executeCode(
+            currentCode,
+            langId,
+            stdin,
+            selectedProblem?.title || problem,
+            selectedProblem?.examples || []
+        );
+        setConsoleTab("output");
+    }, [getText, langId, stdin, selectedProblem, problem, executeCode]);
+
+    const handleRunRef = useRef(handleRun);
+    useEffect(() => { handleRunRef.current = handleRun; }, [handleRun]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); handleRun(); }
+            if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); handleRunRef.current(); }
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    });
+    }, []);
 
     const handleSendMessage = (e: React.FormEvent) => {
         e.preventDefault();
@@ -294,17 +203,24 @@ const Room = () => {
     };
 
     const handleSelectProblem = async (p: string) => {
+        const currentVal = getText();
+        if (!isStarterCode(currentVal, problem)) {
+            if (!window.confirm("Changing the problem will replace the current code. Continue?")) return;
+        }
         try {
             setProblem(p); setShowProblemPicker(false);
             await api.post("/rooms/problem", { roomId: id, problem: p });
             socket.emit("problemChange", { roomId: id, problem: p });
+            const starter = getStarterCode(p, language);
+            setText(starter);
             toast.success(`Problem set: ${p}`);
         } catch { toast.error("Failed to set problem."); }
     };
 
     const handleEndSession = async () => {
-        if (!isInterviewer) return;
+        if (!isInterviewer || endingRef.current) return;
         if (!confirm("Are you sure you want to end this interview session? A final performance report will be generated.")) return;
+        endingRef.current = true;
         try {
             setLoadingEnd(true);
             let transcript = "";
@@ -323,7 +239,7 @@ const Room = () => {
                     transcript = transcribeRes.data.transcript;
                     fillerCount = transcribeRes.data.fillerCount;
                 } catch (e) {
-                    console.warn("Transcription skipped:", e);
+                    if (import.meta.env.DEV) console.warn("Transcription skipped:", e);
                 }
             }
 
@@ -332,17 +248,19 @@ const Room = () => {
             socket.emit("sessionEnded", { roomId: id });
 
             try {
-                await api.post("/reports/generate", { sessionId, code, problem, transcript, fillerCount, elapsed, runCount });
+                await api.post("/reports/generate", { sessionId, code: getText(), problem, transcript, fillerCount, elapsed, runCount });
                 toast.success("Session ended. Report generated!");
             } catch (err) {
-                console.error("Report generation failed:", err);
+                if (import.meta.env.DEV) console.error("Report generation failed:", err);
                 toast.error("Session ended, but report generation had an issue.");
             }
 
             navigate(`/report/${sessionId}`);
         } catch (err) {
-            console.error("End session error:", err);
+            endingRef.current = false;
+            if (import.meta.env.DEV) console.error("End session error:", err);
             toast.error("Failed to end session. Please try again.");
+        } finally {
             setLoadingEnd(false);
         }
     };
@@ -373,49 +291,13 @@ const Room = () => {
 
                 {/* ─── Problem Panel ──────────────────────────────────────── */}
                 {showDescription && selectedProblem && (
-                    <div
-                        style={{ width: `${problemWidth}px` }}
-                        className="border-r border-white/[0.06] overflow-y-auto p-5 flex flex-col gap-4 bg-[var(--bg-surface)] shrink-0"
-                    >
-                        <div className="flex items-center gap-2.5">
-                            <h2 className="text-lg font-bold text-white">{selectedProblem.title}</h2>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${
-                                selectedProblem.difficulty === "EASY" ? "text-green-400 border-green-400/20 bg-green-400/5"
-                                : selectedProblem.difficulty === "MEDIUM" ? "text-yellow-400 border-yellow-400/20 bg-yellow-400/5"
-                                : "text-red-400 border-red-400/20 bg-red-400/5"
-                            }`}>
-                                {selectedProblem.difficulty}
-                            </span>
-                        </div>
-                        <p className="text-[var(--text-secondary)] text-sm leading-relaxed whitespace-pre-wrap">{selectedProblem.description}</p>
-
-                        {selectedProblem.examples && Array.isArray(selectedProblem.examples) && selectedProblem.examples.map((ex: { input: string; output: string }, i: number) => (
-                            <div key={i} className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-3.5">
-                                <p className="text-[10px] text-[var(--text-muted)] mb-2 font-semibold uppercase tracking-wider">Example {i + 1}</p>
-                                <p className="text-xs font-mono text-[var(--text-secondary)]">Input: {ex.input}</p>
-                                <p className="text-xs font-mono text-[var(--text-secondary)] mt-1">Output: {ex.output}</p>
-                            </div>
-                        ))}
-
-                        {selectedProblem.constraints && selectedProblem.constraints.length > 0 && (
-                            <div className="mt-1">
-                                <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-[0.15em] mb-2 font-semibold">Constraints</p>
-                                <ul className="list-disc pl-4 space-y-1">
-                                    {selectedProblem.constraints.map((c: string, i: number) => (
-                                        <li key={i} className="text-xs text-[var(--text-muted)] font-mono">{c}</li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Problem resize handle */}
-                {showDescription && selectedProblem && (
-                    <div
-                        onMouseDown={(e) => { e.preventDefault(); activeResizeRef.current = "problem"; }}
-                        className="w-1 hover:w-1.5 bg-white/[0.03] hover:bg-[var(--accent)] cursor-col-resize transition-colors select-none self-stretch shrink-0 z-40"
-                    />
+                    <>
+                        <ProblemPanel problem={selectedProblem} width={problemWidth} />
+                        <div
+                            onMouseDown={startResize("problem")}
+                            className="w-1 hover:w-1.5 bg-white/[0.03] hover:bg-[var(--accent)] cursor-col-resize transition-colors select-none self-stretch shrink-0 z-40"
+                        />
+                    </>
                 )}
 
                 {/* ─── Editor Center ──────────────────────────────────────── */}
@@ -424,12 +306,19 @@ const Room = () => {
                     <div className="flex items-center gap-3 px-4 py-2 border-b border-white/[0.06] bg-[var(--bg-surface)]">
                         <select
                             value={language}
+                            disabled={!isInterviewer}
                             onChange={(e) => {
                                 const lang = e.target.value;
                                 setLanguage(lang); setLangId(langMap[lang]);
                                 socket.emit("languageChange", { roomId: id, language: lang });
+                                const currentVal = getText();
+                                if (isStarterCode(currentVal, activeProblemTitle)) {
+                                    const starter = getStarterCode(activeProblemTitle, lang);
+                                    setText(starter);
+                                }
                             }}
-                            className="bg-[var(--bg-interactive)] border border-white/[0.08] text-[var(--text-primary)] text-xs rounded-lg px-3 py-1.5 outline-none cursor-pointer hover:border-white/20 transition font-medium"
+                            className="bg-[var(--bg-interactive)] border border-white/[0.08] text-[var(--text-primary)] text-xs rounded-lg px-3 py-1.5 outline-none cursor-pointer hover:border-white/20 transition font-medium disabled:opacity-75 disabled:cursor-not-allowed"
+                            title={!isInterviewer ? "Only interviewer can change editor language" : "Change editor language"}
                         >
                             {LANGUAGES.map((l) => (
                                 <option key={l.value} value={l.value} className="bg-[#0c0d14] text-white">
@@ -444,68 +333,63 @@ const Room = () => {
                         >
                             {loadingRun ? "Running..." : "▶ Run"}
                         </button>
+                        <button
+                            onClick={() => hasReview ? clearReview() : requestReview(getText(), problem, language)}
+                            disabled={loadingReview}
+                            className={`btn btn-sm ${hasReview ? "btn-secondary" : "bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 hover:bg-indigo-500/30"} transition`}
+                        >
+                            {loadingReview ? "Reviewing..." : hasReview ? "✕ Clear Review" : "🔍 AI Review"}
+                        </button>
                     </div>
 
-                    {/* Monaco Editor */}
+                    {/* Monaco Editor — Yjs-managed, uncontrolled */}
                     <div className="flex-1">
                         <Editor
-                            value={code}
-                            onChange={(val) => { setCode(val || ""); socket.emit("codeChange", { roomId: id, code: val }); }}
                             onMount={(editor, monacoInstance) => {
                                 editorRef.current = editor;
                                 monacoRef.current = monacoInstance;
+                                bindEditor(editor);
                                 editor.onDidChangeCursorPosition((e) => {
                                     socket.emit("cursorMove", { roomId: id, user, position: e.position });
+                                });
+                                // Debounced replay snapshots
+                                let replayTimer: ReturnType<typeof setTimeout>;
+                                editor.onDidChangeModelContent(() => {
+                                    clearTimeout(replayTimer);
+                                    replayTimer = setTimeout(() => {
+                                        socket.emit("codeChange", { roomId: id, code: getText() });
+                                    }, 2000);
                                 });
                             }}
                             height="100%"
                             language={language}
-                            defaultValue="// Start coding here..."
-                            theme="vs-dark"
-                            options={{ fontSize: 13, minimap: { enabled: false }, padding: { top: 12 }, automaticLayout: true, fontFamily: "var(--font-mono)" }}
+                            defaultValue=""
+                            theme={resolvedTheme === "dark" ? "vs-dark" : "light"}
+                            options={{ fontSize: 13, minimap: { enabled: false }, padding: { top: 12 }, automaticLayout: true, fontFamily: "var(--font-mono)", glyphMargin: true }}
                         />
                     </div>
 
                     {/* Console resize handle */}
                     <div
-                        onMouseDown={(e) => { e.preventDefault(); activeResizeRef.current = "console"; }}
+                        onMouseDown={startResize("console")}
                         className="h-0.5 hover:h-1 bg-white/[0.04] hover:bg-[var(--accent)] cursor-row-resize transition-colors select-none w-full shrink-0 z-40"
                     />
 
                     {/* Console */}
-                    <div
-                        style={{ height: `${consoleHeight}px` }}
-                        className="border-t border-white/[0.06] bg-[var(--bg-surface)] px-4 py-2.5 shrink-0 overflow-y-auto flex flex-col"
-                    >
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={() => setConsoleTab("output")}
-                                    className={`text-[10px] uppercase tracking-[0.15em] font-semibold transition ${consoleTab === "output" ? "text-[var(--accent)] border-b border-[var(--accent)] pb-0.5" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`}
-                                >Output</button>
-                                <button
-                                    onClick={() => setConsoleTab("stdin")}
-                                    className={`text-[10px] uppercase tracking-[0.15em] font-semibold transition ${consoleTab === "stdin" ? "text-[var(--accent)] border-b border-[var(--accent)] pb-0.5" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`}
-                                >Input (STDIN)</button>
-                            </div>
-                            <span className="text-[9px] text-[var(--text-muted)] font-mono">Ctrl+Enter to Run</span>
-                        </div>
-                        {consoleTab === "output" ? (
-                            <p className="text-[var(--text-secondary)] font-mono text-xs whitespace-pre-wrap flex-1">{output || "Run your code to see output..."}</p>
-                        ) : (
-                            <textarea
-                                value={stdin}
-                                onChange={(e) => setStdin(e.target.value)}
-                                placeholder="Enter program STDIN input here..."
-                                className="w-full flex-1 bg-black/20 border border-white/[0.06] rounded-lg p-2 text-xs text-[var(--text-secondary)] font-mono outline-none focus:border-[var(--accent)]/40 resize-none"
-                            />
-                        )}
-                    </div>
+                    <ConsolePanel
+                        height={consoleHeight}
+                        consoleTab={consoleTab}
+                        setConsoleTab={setConsoleTab}
+                        output={output}
+                        testResults={testResults}
+                        stdin={stdin}
+                        setStdin={setStdin}
+                    />
                 </div>
 
                 {/* Right panel resize handle */}
                 <div
-                    onMouseDown={(e) => { e.preventDefault(); activeResizeRef.current = "right"; }}
+                    onMouseDown={startResize("right")}
                     className="w-1 hover:w-1.5 bg-white/[0.03] hover:bg-[var(--accent)] cursor-col-resize transition-colors select-none self-stretch shrink-0 z-40"
                 />
 
@@ -518,6 +402,8 @@ const Room = () => {
                         localVideoRef={localVideoRef}
                         remoteVideoRef={remoteVideoRef}
                         cameraAllowed={cameraAllowed}
+                        remoteConnected={remoteConnected}
+                        remoteHasVideo={remoteHasVideo}
                     />
                     <ChatPanel
                         messages={messages}

@@ -1,15 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 export const MobileNotice = () => {
-    const [dismissed, setDismissed] = useState(true);
-
-    useEffect(() => {
-        // Only show if it wasn't dismissed in the current session
-        const isDismissed = sessionStorage.getItem("mobile-notice-dismissed");
-        if (!isDismissed) {
-            setDismissed(false);
-        }
-    }, []);
+    const [dismissed, setDismissed] = useState(() => {
+        if (typeof window === "undefined") return true;
+        return Boolean(sessionStorage.getItem("mobile-notice-dismissed"));
+    });
 
     const handleDismiss = () => {
         sessionStorage.setItem("mobile-notice-dismissed", "true");

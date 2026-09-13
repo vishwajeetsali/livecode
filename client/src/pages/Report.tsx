@@ -3,28 +3,175 @@ import { useParams, useNavigate } from "react-router-dom";
 import api from "../utils/api";
 import type { Report as IReport } from "../types";
 import { safeStr } from "../utils/helper";
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from "recharts";
+
+// ─── Custom SVG Skills Radar Chart ───────────────────────────────────────────
+const SkillsRadar = ({ codeScore = 0, commScore = 0, psScore = 0 }: { codeScore: number; commScore: number; psScore: number }) => {
+    const center = 130;
+    const maxR = 80;
+
+    const angles = [-Math.PI / 2, Math.PI / 6, (5 * Math.PI) / 6];
+    const scores = [codeScore, commScore, psScore];
+    const labels = ["Coding Logic", "Communication", "Problem Solving"];
+    const colors = ["#6366f1", "#3b82f6", "#eab308"];
+
+    const gridLevels = [0.25, 0.5, 0.75, 1.0];
+
+    const getPolyPoints = (factor: number) => {
+        return angles
+            .map((angle) => {
+                const r = maxR * factor;
+                const x = center + r * Math.cos(angle);
+                const y = center + r * Math.sin(angle);
+                return `${x},${y}`;
+            })
+            .join(" ");
+    };
+
+    const dataPoints = scores
+        .map((score, i) => {
+            const factor = Math.max(0, Math.min(100, score)) / 100;
+            const r = maxR * factor;
+            const x = center + r * Math.cos(angles[i]);
+            const y = center + r * Math.sin(angles[i]);
+            return `${x},${y}`;
+        })
+        .join(" ");
+
+    return (
+        <div className="w-full h-full flex items-center justify-center relative">
+            <svg viewBox="0 0 260 260" className="w-full h-full max-w-[260px] max-h-[260px]">
+                <defs>
+                    <linearGradient id="radarFill" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#6366f1" stopOpacity="0.4" />
+                        <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.2" />
+                    </linearGradient>
+                </defs>
+
+                {gridLevels.map((lvl) => (
+                    <polygon
+                        key={lvl}
+                        points={getPolyPoints(lvl)}
+                        fill="none"
+                        stroke="rgba(255, 255, 255, 0.08)"
+                        strokeWidth="1"
+                        strokeDasharray={lvl === 1 ? "none" : "3,3"}
+                    />
+                ))}
+
+                {angles.map((angle, i) => {
+                    const x2 = center + maxR * Math.cos(angle);
+                    const y2 = center + maxR * Math.sin(angle);
+                    return (
+                        <line
+                            key={i}
+                            x1={center}
+                            y1={center}
+                            x2={x2}
+                            y2={y2}
+                            stroke="rgba(255, 255, 255, 0.12)"
+                            strokeWidth="1"
+                        />
+                    );
+                })}
+
+                <polygon
+                    points={dataPoints}
+                    fill="url(#radarFill)"
+                    stroke="#6366f1"
+                    strokeWidth="2.5"
+                    className="transition-all duration-700 ease-out"
+                />
+
+                {scores.map((score, i) => {
+                    const factor = Math.max(0, Math.min(100, score)) / 100;
+                    const r = maxR * factor;
+                    const cx = center + r * Math.cos(angles[i]);
+                    const cy = center + r * Math.sin(angles[i]);
+
+                    const lx = center + (maxR + 24) * Math.cos(angles[i]);
+                    const ly = center + (maxR + 14) * Math.sin(angles[i]);
+
+                    const anchor = i === 0 ? "middle" : i === 1 ? "start" : "end";
+
+                    return (
+                        <g key={i}>
+                            <circle cx={cx} cy={cy} r="4" fill={colors[i]} stroke="#0a0a0f" strokeWidth="2" />
+                            <text
+                                x={lx}
+                                y={ly}
+                                fill="#94a3b8"
+                                fontSize="10"
+                                fontWeight="600"
+                                textAnchor={anchor}
+                                dominantBaseline="middle"
+                            >
+                                {labels[i]} ({score})
+                            </text>
+                        </g>
+                    );
+                })}
+            </svg>
+        </div>
+    );
+};
 
 const Report = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [report, setReport] = useState<IReport | null>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        let isMounted = true;
+        let pollTimer: ReturnType<typeof setTimeout> | null = null;
+        let attempts = 0;
+        const maxAttempts = 6;
+
         const fetchReport = async () => {
-            const res = await api.get(`/reports/${id}`);
-            setReport(res.data);
-            setLoading(false);
+            try {
+                const res = await api.get(`/reports/${id}`);
+                if (isMounted) {
+                    setReport(res.data);
+                    setError(null);
+                    setLoading(false);
+                }
+            } catch (err: unknown) {
+                const apiErr = err as { response?: { status?: number; data?: { error?: { message?: string } } } };
+                const status = apiErr?.response?.status;
+
+                // If report is still in-flight/being generated by host (404), poll up to maxAttempts
+                if (status === 404 && attempts < maxAttempts) {
+                    attempts++;
+                    pollTimer = setTimeout(fetchReport, 1500);
+                    return;
+                }
+
+                if (isMounted) {
+                    const msg = apiErr?.response?.data?.error?.message || "Failed to load report.";
+                    setError(msg);
+                    setLoading(false);
+                }
+            }
         };
+
         fetchReport();
+
+        return () => {
+            isMounted = false;
+            if (pollTimer) clearTimeout(pollTimer);
+        };
     }, [id]);
 
-    const chartData = report ? [
-        { subject: "Coding Logic", score: report.codeScore || 0, fullMark: 100 },
-        { subject: "Communication", score: report.communicationScore || 0, fullMark: 100 },
-        { subject: "Problem Solving", score: report.problemSolvingScore || 0, fullMark: 100 },
-    ] : [];
+    if (error || (!loading && !report)) return (
+        <div className="min-h-screen bg-[var(--bg-deep)] text-white flex flex-col items-center justify-center gap-3">
+            <p className="text-xl font-bold text-red-400">Report Not Found</p>
+            <p className="text-[var(--text-muted)] text-sm">{error || "This report does not exist or you do not have permission to view it."}</p>
+            <button onClick={() => navigate("/dashboard")} className="btn btn-secondary btn-sm mt-3">
+                ← Back to Dashboard
+            </button>
+        </div>
+    );
 
     // ─── Loading Skeleton ────────────────────────────────────────────────────
     if (loading) return (
@@ -94,18 +241,11 @@ const Report = () => {
                     <div className="glass-card p-6 flex flex-col justify-center items-center" style={{ height: 340, minHeight: 340 }}>
                         <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-[0.15em] self-start mb-4 font-semibold">Skills Breakdown</p>
                         <div style={{ width: "100%", height: "85%", minHeight: 240 }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={chartData}>
-                                    <PolarGrid stroke="rgba(255,255,255,0.05)" />
-                                    <PolarAngleAxis dataKey="subject" tick={{ fill: "#94a3b8", fontSize: 11 }} />
-                                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#475569" }} />
-                                    <Tooltip
-                                        contentStyle={{ backgroundColor: "var(--bg-surface)", borderColor: "var(--border-subtle)", borderRadius: "12px", fontSize: "12px" }}
-                                        itemStyle={{ color: "var(--accent)" }}
-                                    />
-                                    <Radar name="Performance" dataKey="score" stroke="var(--accent)" fill="var(--accent)" fillOpacity={0.15} />
-                                </RadarChart>
-                            </ResponsiveContainer>
+                            <SkillsRadar
+                                codeScore={report?.codeScore || 0}
+                                commScore={report?.communicationScore || 0}
+                                psScore={report?.problemSolvingScore || 0}
+                            />
                         </div>
                     </div>
 
@@ -209,6 +349,12 @@ const Report = () => {
                         className="btn btn-primary btn-md"
                     >
                         Back to Dashboard
+                    </button>
+                    <button
+                        onClick={() => navigate(`/replay/${id}`)}
+                        className="btn btn-secondary btn-md"
+                    >
+                        ▶ Watch Replay
                     </button>
                     <button
                         onClick={() => navigate("/mock")}

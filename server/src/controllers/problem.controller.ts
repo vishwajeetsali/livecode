@@ -3,7 +3,7 @@ import { ProblemService } from "../services/problem.service.js";
 
 export const getProblems = async (_req: Request, res: Response) => {
     const problems = await ProblemService.getAllProblems();
-    res.json(problems);
+    res.json({ success: true, data: problems });
 };
 
 export const createProblem = async (req: Request, res: Response) => {
@@ -15,11 +15,11 @@ export const createProblem = async (req: Request, res: Response) => {
         examples,
         constraints,
     });
-    res.status(201).json(problem);
+    res.status(201).json({ success: true, data: problem });
 };
 
 export const deleteProblem = async (req: Request, res: Response) => {
     const { id } = req.params as { id: string };
     await ProblemService.deleteProblem(id);
-    res.json({ message: "problem deleted successfully" });
+    res.json({ success: true, data: { message: "problem deleted successfully" } });
 };

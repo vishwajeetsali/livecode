@@ -1,40 +1,47 @@
-import dotenv from "dotenv";
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { prisma } from "../lib/prisma.js";
+import { env } from "./env.js";
+import { logger } from "../utils/logger.js";
 
-dotenv.config();
+const clientID = env.GOOGLE_CLIENT_ID || "unset_google_client_id";
+const clientSecret = env.GOOGLE_CLIENT_SECRET || "unset_google_client_secret";
 
 passport.use(
     new GoogleStrategy(
         {
-            clientID: process.env.GOOGLE_CLIENT_ID!,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-            callbackURL: `${process.env.SERVER_URL || "http://localhost:5000"}/api/auth/google/callback`,
+            clientID,
+            clientSecret,
+            callbackURL: `${env.SERVER_URL}/api/auth/google/callback`,
         },
-        async (accessToken, refreshToken, profile, done) => {
+        async (_accessToken, _refreshToken, profile, done) => {
             try {
-                // 1. find user by email
-                const email = profile.emails?.[0]?.value!;
+                const email = profile.emails?.[0]?.value;
+                if (!email) {
+                    return done(new Error("No email found in Google OAuth profile"), false);
+                }
 
                 let user = await prisma.user.findUnique({
-                    where: { email: email },
+                    where: { email },
                 });
 
-                // 2. if no user → create one
+                let isNewUser = false;
+
                 if (!user) {
                     user = await prisma.user.create({
                         data: {
-                            email: email,
-                            name: profile.displayName,
+                            email,
+                            name: profile.displayName || "User",
                             avatar: profile.photos?.[0]?.value ?? null,
                         },
                     });
+                    isNewUser = true;
                 }
 
-                return done(null, user);
+                return done(null, { ...user, isNewUser });
             } catch (err) {
-                return done(err, false);
+                logger.error("Passport Google Strategy error", { error: (err as Error)?.message });
+                return done(err as Error, false);
             }
         }
     )

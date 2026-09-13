@@ -16,12 +16,14 @@ export const ProblemService = {
         examples?: any[];
         constraints?: string[];
     }) {
+        const title = data.title.trim();
+        const description = data.description.trim();
         try {
             return await prisma.problem.create({
                 data: {
-                    title: data.title,
+                    title,
                     difficulty: data.difficulty,
-                    description: data.description,
+                    description,
                     examples: data.examples || [],
                     constraints: data.constraints || [],
                 },
@@ -35,6 +37,16 @@ export const ProblemService = {
     },
 
     async deleteProblem(id: string) {
+        const problem = await prisma.problem.findUnique({ where: { id } });
+        if (!problem) {
+            throw new NotFoundError("Problem not found");
+        }
+
+        const protectedTitles = ["Two Sum", "Valid Parentheses", "Reverse Linked List"];
+        if (protectedTitles.map((t) => t.toLowerCase()).includes(problem.title.trim().toLowerCase())) {
+            throw new BadRequestError("Built-in system problems cannot be deleted");
+        }
+
         try {
             return await prisma.problem.delete({
                 where: { id },

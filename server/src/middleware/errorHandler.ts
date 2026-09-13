@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { AppError } from "../errors/AppError.js";
 import { logger } from "../utils/logger.js";
 import { ZodError } from "zod";
+import { env } from "../config/env.js";
 
 export const errorHandler = (err: Error, req: Request, res: Response, _next: NextFunction) => {
     const requestId = req.id;
@@ -48,6 +49,54 @@ export const errorHandler = (err: Error, req: Request, res: Response, _next: Nex
         });
     }
 
+    // Google OAuth TokenError
+    if (err.name === "TokenError") {
+        logger.error("Google OAuth Token Error", { requestId, message: err.message });
+        return res.status(400).json({
+            success: false,
+            error: {
+                message: "Authentication failed with Google OAuth.",
+                code: "OAUTH_TOKEN_ERROR",
+                statusCode: 400,
+                details: null,
+            },
+        });
+    }
+
+    // JWT verification errors
+    if (err.name === "JsonWebTokenError" || err.name === "TokenExpiredError") {
+        logger.warn("JWT Verification Error", { requestId, message: err.message });
+        return res.status(401).json({
+            success: false,
+            error: {
+                message: "Invalid or expired token",
+                code: "UNAUTHORIZED",
+                statusCode: 401,
+                details: null,
+            },
+        });
+    }
+
+    // Multer file upload errors
+    if (err.name === "MulterError") {
+        const multerErr = err as Error & { code?: string };
+        const statusCode = multerErr.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+        const message = multerErr.code === "LIMIT_FILE_SIZE"
+            ? "Uploaded file exceeds the maximum 25MB limit"
+            : err.message || "File upload error";
+
+        logger.warn("Multer Upload Error", { requestId, code: multerErr.code, message });
+        return res.status(statusCode).json({
+            success: false,
+            error: {
+                message,
+                code: multerErr.code === "LIMIT_FILE_SIZE" ? "PAYLOAD_TOO_LARGE" : "INVALID_FILE_UPLOAD",
+                statusCode,
+                details: null,
+            },
+        });
+    }
+
     // Prisma / DB errors or Unhandled internal errors
     logger.error(err.message || "Unhandled exception", {
         requestId,
@@ -56,8 +105,8 @@ export const errorHandler = (err: Error, req: Request, res: Response, _next: Nex
         method: req.method,
     });
 
-    const statusCode = (err as any).statusCode || 500;
-    const isProd = process.env.NODE_ENV === "production";
+    const statusCode = (err as Error & { statusCode?: number }).statusCode || 500;
+    const isProd = env.NODE_ENV === "production";
 
     return res.status(statusCode).json({
         success: false,
@@ -65,7 +114,7 @@ export const errorHandler = (err: Error, req: Request, res: Response, _next: Nex
             message: isProd ? "Internal server error" : err.message || "Internal server error",
             code: "INTERNAL_SERVER_ERROR",
             statusCode,
-            details: isProd ? null : err.stack,
+            details: null,
         },
     });
 };

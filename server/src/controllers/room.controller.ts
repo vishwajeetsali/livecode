@@ -7,20 +7,21 @@ export const createRoom = async (req: Request, res: Response) => {
     const user = req.user as JwtUser;
     const { mode } = req.body;
     const result = await RoomService.createRoom(user.userId, mode);
-    res.status(201).json(result);
+    res.status(201).json({ success: true, data: result });
 };
 
 export const getRoom = async (req: Request, res: Response) => {
+    const user = req.user as JwtUser;
     const { id } = req.params as { id: string };
-    const room = await RoomService.getRoomById(id);
-    res.json(room);
+    const room = await RoomService.getRoomByIdForUser(id, user.userId);
+    res.json({ success: true, data: room });
 };
 
 export const joinRoom = async (req: Request, res: Response) => {
     const user = req.user as JwtUser;
     const { roomId } = req.body;
     const result = await RoomService.joinRoom(user.userId, roomId);
-    res.status(201).json(result);
+    res.status(201).json({ success: true, data: result });
 };
 
 export const setRoomProblem = async (req: Request, res: Response) => {
@@ -33,11 +34,18 @@ export const setRoomProblem = async (req: Request, res: Response) => {
     }
 
     const room = await RoomService.updateRoomProblem(roomId, problem);
-    res.json(room);
+    res.json({ success: true, data: room });
 };
 
 export const endSession = async (req: Request, res: Response) => {
+    const user = req.user as JwtUser;
     const { roomId } = req.body;
+
+    const existingRoom = await RoomService.getRoomById(roomId);
+    if (existingRoom.userId !== user.userId) {
+        throw new ForbiddenError("Only the room creator can end the session");
+    }
+
     const result = await RoomService.endRoom(roomId);
-    res.json(result);
+    res.json({ success: true, data: result });
 };

@@ -28,12 +28,12 @@ const ChatPanel = ({ messages, newMessage, setNewMessage, onSendMessage, user }:
         <>
             {/* Header */}
             <div className="flex items-center px-4 py-2 border-b border-white/[0.06] bg-[var(--bg-surface)]">
-                <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-[var(--text-muted)]">💬 Discussion</span>
+                <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-[var(--text-muted)]">Discussion</span>
                 <span className="ml-auto text-[10px] text-[var(--text-muted)] font-mono">{messages.length}</span>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 p-3 overflow-y-auto space-y-3">
+            <div className="flex-1 p-3 overflow-y-auto space-y-3" role="log" aria-label="Chat messages" aria-live="polite">
                 {messages.length === 0 ? (
                     <p className="text-[var(--text-muted)] text-[10px] text-center mt-4">No messages yet. Say hello!</p>
                 ) : (
@@ -65,15 +65,16 @@ const ChatPanel = ({ messages, newMessage, setNewMessage, onSendMessage, user }:
             </div>
 
             {/* Input */}
-            <form onSubmit={onSendMessage} className="p-2.5 border-t border-white/[0.04] bg-[var(--bg-surface)] flex items-center gap-2">
+            <form onSubmit={onSendMessage} className="p-2.5 border-t border-white/[0.04] bg-[var(--bg-surface)] flex items-center gap-2" aria-label="Send a chat message">
                 <input
                     type="text"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     placeholder="Type a message..."
+                    aria-label="Chat message"
                     className="flex-1 bg-white/[0.03] border border-white/[0.06] text-white rounded-xl px-3 py-2 text-xs outline-none focus:border-[var(--accent)]/40 transition"
                 />
-                <button type="submit" className="btn btn-primary btn-sm">
+                <button type="submit" className="btn btn-primary btn-sm" aria-label="Send">
                     Send
                 </button>
             </form>

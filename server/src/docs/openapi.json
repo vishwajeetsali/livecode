@@ -7,8 +7,12 @@
   },
   "servers": [
     {
+      "url": "/api/v1",
+      "description": "Current Server (relative)"
+    },
+    {
       "url": "http://localhost:5000/api/v1",
-      "description": "Local Development Server (v1)"
+      "description": "Local Development Server"
     }
   ],
   "components": {
@@ -59,6 +63,23 @@
         }
       }
     },
+    "/auth/refresh": {
+      "post": {
+        "summary": "Refresh JWT access token using httpOnly refreshToken cookie",
+        "responses": {
+          "200": { "description": "Returns new access token" },
+          "401": { "description": "Invalid or expired refresh token" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "Logout user and invalidate refresh token session",
+        "responses": {
+          "200": { "description": "Successfully logged out" }
+        }
+      }
+    },
     "/rooms/create": {
       "post": {
         "summary": "Create a new interview room",
@@ -102,6 +123,53 @@
         }
       }
     },
+    "/rooms/problem": {
+      "post": {
+        "summary": "Update active problem in room (Interviewer only)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "roomId": { "type": "string" },
+                  "problem": { "type": "string" }
+                },
+                "required": ["roomId", "problem"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Problem updated successfully" },
+          "403": { "description": "Only room creator can update problem" }
+        }
+      }
+    },
+    "/rooms/end": {
+      "post": {
+        "summary": "End interview session in room (Interviewer only)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "roomId": { "type": "string" }
+                },
+                "required": ["roomId"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Session ended successfully" },
+          "403": { "description": "Only room creator can end session" }
+        }
+      }
+    },
     "/code/execute": {
       "post": {
         "summary": "Execute code via Judge0 execution engine",
@@ -114,7 +182,9 @@
                 "properties": {
                   "code": { "type": "string" },
                   "languageId": { "type": "integer" },
-                  "stdin": { "type": "string" }
+                  "stdin": { "type": "string" },
+                  "problemTitle": { "type": "string" },
+                  "examples": { "type": "array" }
                 },
                 "required": ["code", "languageId"]
               }
@@ -129,8 +199,108 @@
     "/ai/hint": {
       "post": {
         "summary": "Stream AI coding hint via SSE (Server-Sent Events)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": { "type": "string" },
+                  "problem": { "type": "string" },
+                  "isMock": { "type": "boolean" }
+                },
+                "required": ["code", "problem"]
+              }
+            }
+          }
+        },
         "responses": {
           "200": { "description": "SSE text stream" }
+        }
+      }
+    },
+    "/ai/review": {
+      "post": {
+        "summary": "Run AI code review and get line-by-line comments",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": { "type": "string" },
+                  "problem": { "type": "string" },
+                  "language": { "type": "string" }
+                },
+                "required": ["code"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Array of review comments" }
+        }
+      }
+    },
+    "/mock/question": {
+      "post": {
+        "summary": "Generate AI mock interview question",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "difficulty": { "type": "string", "enum": ["EASY", "MEDIUM", "HARD"] },
+                  "role": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Generated question object" }
+        }
+      }
+    },
+    "/mock/start": {
+      "post": {
+        "summary": "Initialize a mock interview session",
+        "responses": {
+          "200": { "description": "Returns roomId and sessionId" }
+        }
+      }
+    },
+    "/reports/generate": {
+      "post": {
+        "summary": "Generate AI performance report for a completed session",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sessionId": { "type": "string" },
+                  "code": { "type": "string" },
+                  "problem": { "type": "string" },
+                  "transcript": { "type": "string" },
+                  "fillerCount": { "type": "integer" },
+                  "elapsed": { "type": "integer" },
+                  "hintCount": { "type": "integer" },
+                  "runCount": { "type": "integer" },
+                  "timeLimit": { "type": "integer" }
+                },
+                "required": ["sessionId"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Generated report object" },
+          "403": { "description": "Unauthorized to generate report for this session" }
         }
       }
     },
@@ -142,7 +312,32 @@
         ],
         "responses": {
           "200": { "description": "Report details returned" },
-          "403": { "description": "Unauthorized access" }
+          "403": { "description": "Unauthorized access" },
+          "404": { "description": "Report not found" }
+        }
+      }
+    },
+    "/replay/{sessionId}": {
+      "get": {
+        "summary": "Fetch recorded replay events for session",
+        "parameters": [
+          { "name": "sessionId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Array of replay events" },
+          "404": { "description": "Replay not found or unauthorized" }
+        }
+      }
+    },
+    "/sessions/my": {
+      "get": {
+        "summary": "Get authenticated user's sessions list with pagination",
+        "parameters": [
+          { "name": "cursor", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "List of user sessions" }
         }
       }
     },
@@ -151,6 +346,35 @@
         "summary": "List all custom interview problems",
         "responses": {
           "200": { "description": "Array of problems" }
+        }
+      }
+    },
+    "/problems/create": {
+      "post": {
+        "summary": "Create problem (Interviewer only)",
+        "responses": {
+          "201": { "description": "Problem created" },
+          "403": { "description": "Forbidden" }
+        }
+      }
+    },
+    "/problems/{id}": {
+      "delete": {
+        "summary": "Delete problem (Interviewer only)",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Problem deleted" },
+          "403": { "description": "Forbidden" }
+        }
+      }
+    },
+    "/transcribe": {
+      "post": {
+        "summary": "Transcribe audio recording via Groq Whisper",
+        "responses": {
+          "200": { "description": "Transcript and filler words count" }
         }
       }
     }

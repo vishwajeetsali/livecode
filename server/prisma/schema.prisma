@@ -41,7 +41,7 @@ model User {
 
 model Room {
   id        String   @id @default(cuid())
-  createdBy User     @relation("CreatedBy", fields: [userId], references: [id])
+  createdBy User     @relation("CreatedBy", fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   mode      RoomMode @default(LIVE)
   problem   String?
@@ -55,14 +55,15 @@ model Room {
 
 model Session {
   id        String    @id @default(cuid())
-  room      Room      @relation(fields: [roomId], references: [id])
+  room      Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
   roomId    String
-  candidate User      @relation(fields: [userId], references: [id])
+  candidate User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   startTime DateTime  @default(now())
   endTime   DateTime?
 
-  report Report?
+  report       Report?
+  replayEvents ReplayEvent[]
 
   @@index([roomId])
   @@index([userId])
@@ -71,7 +72,7 @@ model Session {
 
 model Report {
   id                  String   @id @default(cuid())
-  session             Session  @relation(fields: [sessionId], references: [id])
+  session             Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   sessionId           String   @unique
   codeScore           Int?
   communicationScore  Int?
@@ -85,6 +86,18 @@ model Report {
   weaknesses          String[] @default([])
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+}
+
+model ReplayEvent {
+  id        String   @id @default(cuid())
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId String
+  type      String   // "code" | "cursor" | "language"
+  timestamp Int      // milliseconds since session start
+  data      Json     // event payload
+  createdAt DateTime @default(now())
+
+  @@index([sessionId, timestamp])
 }
 
 model Problem {

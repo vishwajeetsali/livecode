@@ -8,7 +8,9 @@ const Dashboard = lazy(() => import("../pages/Dashboard"));
 const Room = lazy(() => import("../pages/Room"));
 const Mock = lazy(() => import("../pages/Mock"));
 const Report = lazy(() => import("../pages/Report"));
+const Replay = lazy(() => import("../pages/Replay"));
 const AuthCallback = lazy(() => import("../pages/AuthCallback"));
+const RoleSelect = lazy(() => import("../pages/RoleSelect"));
 
 const PageLoader = () => (
     <div className="min-h-screen bg-[var(--bg-deep)] text-white flex items-center justify-center">
@@ -25,10 +27,12 @@ const AppRoutes = () => {
             <Routes>
                 <Route path="/" element={<PublicOnlyRoute><Landing /></PublicOnlyRoute>} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
+                <Route path="/role-select" element={<ProtectedRoute><RoleSelect /></ProtectedRoute>} />
                 <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/room/:id" element={<ProtectedRoute><Room /></ProtectedRoute>} />
                 <Route path="/mock" element={<ProtectedRoute><Mock /></ProtectedRoute>} />
                 <Route path="/report/:id" element={<ProtectedRoute><Report /></ProtectedRoute>} />
+                <Route path="/replay/:id" element={<ProtectedRoute><Replay /></ProtectedRoute>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
         </Suspense>

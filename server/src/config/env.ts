@@ -15,6 +15,23 @@ const envSchema = z.object({
     JWT_REFRESH_SECRET: z.string().min(8, "JWT_REFRESH_SECRET must be at least 8 characters"),
     GROQ_API_KEY: z.string().optional(),
     JUDGE0_URL: z.string().default("http://localhost:2358"),
+}).superRefine((data, ctx) => {
+    if (data.NODE_ENV === "production") {
+        if (!process.env.CLIENT_URL || data.CLIENT_URL.includes("localhost") || data.CLIENT_URL.includes("127.0.0.1")) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["CLIENT_URL"],
+                message: "CLIENT_URL must be explicitly set to the production frontend domain (e.g. https://your-app.vercel.app) and cannot point to localhost.",
+            });
+        }
+        if (!process.env.SERVER_URL || data.SERVER_URL.includes("localhost") || data.SERVER_URL.includes("127.0.0.1")) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["SERVER_URL"],
+                message: "SERVER_URL must be explicitly set to the production backend domain (e.g. https://your-backend.onrender.com) and cannot point to localhost.",
+            });
+        }
+    }
 });
 
 const _env = envSchema.safeParse(process.env);

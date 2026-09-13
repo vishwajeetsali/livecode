@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { formatTime, safeStr, langMap } from "../utils/helper";
+import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { formatTime, safeStr, langMap, getSupportedMimeType, LANGUAGES } from "../utils/helper";
 
 describe("Frontend Helper Utilities", () => {
     describe("formatTime", () => {
@@ -26,6 +26,10 @@ describe("Frontend Helper Utilities", () => {
             expect(safeStr("hello")).toBe("hello");
             expect(safeStr(123)).toBe("123");
         });
+
+        it("should JSON.stringify objects", () => {
+            expect(safeStr({ a: 1 })).toBe('{"a":1}');
+        });
     });
 
     describe("langMap", () => {
@@ -39,6 +43,66 @@ describe("Frontend Helper Utilities", () => {
 
         it("should map cpp to Judge0 ID 54", () => {
             expect(langMap.cpp).toBe(54);
+        });
+    });
+
+    describe("LANGUAGES", () => {
+        it("should contain 10 languages", () => {
+            expect(LANGUAGES).toHaveLength(10);
+        });
+
+        it("each language has value, label, and id", () => {
+            for (const lang of LANGUAGES) {
+                expect(lang).toHaveProperty("value");
+                expect(lang).toHaveProperty("label");
+                expect(lang).toHaveProperty("id");
+                expect(typeof lang.value).toBe("string");
+                expect(typeof lang.id).toBe("number");
+            }
+        });
+    });
+
+    describe("getSupportedMimeType", () => {
+        const originalMediaRecorder = globalThis.MediaRecorder;
+
+        beforeAll(() => {
+            // jsdom doesn't have MediaRecorder, so we stub it
+            (globalThis as unknown as { MediaRecorder: unknown }).MediaRecorder = { isTypeSupported: vi.fn(() => false) };
+        });
+
+        afterAll(() => {
+            if (originalMediaRecorder) {
+                globalThis.MediaRecorder = originalMediaRecorder;
+            } else {
+                delete (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder;
+            }
+        });
+        it("returns first supported mime type", () => {
+            // jsdom's MediaRecorder mock
+            const originalIsTypeSupported = MediaRecorder.isTypeSupported;
+            MediaRecorder.isTypeSupported = vi.fn((type: string) => type === "audio/webm");
+
+            expect(getSupportedMimeType()).toBe("audio/webm");
+
+            MediaRecorder.isTypeSupported = originalIsTypeSupported;
+        });
+
+        it("returns empty string when no type supported", () => {
+            const originalIsTypeSupported = MediaRecorder.isTypeSupported;
+            MediaRecorder.isTypeSupported = vi.fn(() => false);
+
+            expect(getSupportedMimeType()).toBe("");
+
+            MediaRecorder.isTypeSupported = originalIsTypeSupported;
+        });
+
+        it("prefers audio/webm over other types", () => {
+            const originalIsTypeSupported = MediaRecorder.isTypeSupported;
+            MediaRecorder.isTypeSupported = vi.fn((type: string) => type === "audio/webm" || type === "audio/mp4");
+
+            expect(getSupportedMimeType()).toBe("audio/webm");
+
+            MediaRecorder.isTypeSupported = originalIsTypeSupported;
         });
     });
 });

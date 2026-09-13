@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import { env } from "../config/env.js";
 
 interface TokenPayload {
     userId: string;
@@ -17,13 +18,13 @@ export const generateAccessToken = (
     if (profile?.name) payload.name = profile.name;
     if (profile?.email) payload.email = profile.email;
     if (profile?.avatar) payload.avatar = profile.avatar;
-    return jwt.sign(payload, process.env.JWT_ACCESS_SECRET!, {
+    return jwt.sign(payload, env.JWT_ACCESS_SECRET, {
         expiresIn: "15m",
     });
 };
 
 export const generateRefreshToken = (userId: string) => {
-    return jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET!, {
+    return jwt.sign({ userId }, env.JWT_REFRESH_SECRET, {
         expiresIn: "7d",
     });
 };

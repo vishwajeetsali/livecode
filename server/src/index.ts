@@ -1,3 +1,4 @@
+import "./config/tracing.js"; // Must be first — registers OTel hooks before other imports
 import { env } from "./config/env.js";
 
 // LiveCode API Server entrypoint
@@ -9,6 +10,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import passport from "./config/passport.js";
 import { initSocket } from "./socket/socket.js";
+import { initYjsServer } from "./socket/yjs.js";
 import authRouter from "./routes/auth.routes.js";
 import roomRouter from "./routes/room.routes.js";
 import codeRouter from "./routes/code.routes.js";
@@ -19,8 +21,10 @@ import mockRouter from "./routes/mock.routes.js";
 import transcribeRoutes from "./routes/transcribe.routes.js";
 import healthRouter from "./routes/health.js";
 import problemRouter from "./routes/problem.routes.js";
+import replayRouter from "./routes/replay.routes.js";
 import { seedProblems } from "./utils/seedProblems.js";
 import { requestIdMiddleware } from "./middleware/requestId.js";
+import { tracingMiddleware } from "./middleware/tracing.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { logger } from "./utils/logger.js";
 
@@ -53,13 +57,23 @@ const aiLimiter = rateLimit({
 });
 
 // ─── Core Middleware ──────────────────────────────────────────────────────────
+const clientUrl = env.CLIENT_URL.replace(/\/+$/, "");
+const allowedOrigins = [clientUrl, `${clientUrl}/`];
+
 app.use(cors({
-    origin: env.CLIENT_URL,
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin) || origin === clientUrl) {
+            callback(null, true);
+        } else {
+            callback(null, false);
+        }
+    },
     credentials: true,
 }));
 app.use(requestIdMiddleware);
+app.use(tracingMiddleware);
 app.use(globalLimiter);
-app.use(express.json());
+app.use(express.json({ limit: "5mb" }));
 app.use(cookieParser());
 app.use(passport.initialize());
 
@@ -78,15 +92,41 @@ v1Router.use("/reports", reportRouter);
 v1Router.use("/mock", mockRouter);
 v1Router.use("/transcribe", transcribeRoutes);
 v1Router.use("/problems", problemRouter);
+v1Router.use("/replay", replayRouter);
 
 app.use("/api/v1", v1Router);
 app.use("/api", v1Router);
 
 const server = createServer(app);
 initSocket(server);
+initYjsServer(server);
 
 // ─── Global Error Handler ─────────────────────────────────────────────────────
 app.use(errorHandler);
+
+// ─── Process Resilience & Graceful Shutdown ───────────────────────────────────
+process.on("unhandledRejection", (reason: unknown) => {
+    logger.error("Unhandled Rejection", {
+        error: reason instanceof Error ? reason.message : reason,
+        stack: reason instanceof Error ? reason.stack : undefined,
+    });
+});
+
+process.on("uncaughtException", (error: Error) => {
+    logger.error("Uncaught Exception", { error: error.message, stack: error.stack });
+    process.exit(1);
+});
+
+const gracefulShutdown = (signal: string) => {
+    logger.info(`Received ${signal}. Shutting down gracefully...`);
+    server.close(() => {
+        logger.info("HTTP & WebSocket servers closed.");
+        process.exit(0);
+    });
+};
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 server.listen(PORT, async () => {
     logger.info(`Server running on port ${PORT}`, { mode: env.NODE_ENV });

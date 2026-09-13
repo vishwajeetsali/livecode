@@ -1,0 +1,14 @@
+# LiveCode robots.txt
+User-agent: *
+Allow: /
+Allow: /#features
+
+# Disallow indexing of private room sessions, mock tests, and performance reports
+Disallow: /room/
+Disallow: /mock
+Disallow: /report/
+Disallow: /replay/
+Disallow: /role-select
+Disallow: /auth/
+
+Sitemap: https://livecode.app/sitemap.xml

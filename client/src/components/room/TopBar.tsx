@@ -32,25 +32,26 @@ const TopBar = ({
     selectedProblem, loadingEnd, onSelectProblem, onEndSession
 }: TopBarProps) => {
     return (
-        <div className="flex items-center justify-between px-5 py-2.5 border-b border-white/[0.06] bg-[var(--bg-deep)]">
+        <div className="flex items-center justify-between px-5 py-2.5 border-b border-white/[0.06] bg-[var(--bg-deep)]" role="toolbar" aria-label="Room controls">
             {/* Left cluster */}
             <div className="flex items-center gap-3">
-                <span className="text-[var(--accent)] font-bold text-sm">LiveCode</span>
-                <div className="w-px h-4 bg-white/[0.08]" />
+                <span className="text-[var(--accent)] font-bold text-sm" aria-hidden="true">LiveCode</span>
+                <div className="w-px h-4 bg-white/[0.08]" aria-hidden="true" />
                 <span className="text-[var(--text-muted)] text-xs font-mono">
                     {id && id.length > 12 ? `${id.slice(0, 8)}...` : id}
                 </span>
                 <button
                     onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/room/${id}`); toast.success("Room link copied!"); }}
                     className="btn btn-secondary btn-sm text-[10px]"
+                    aria-label="Copy room link to clipboard"
                 >
                     Copy Link
                 </button>
-                <div className="w-px h-4 bg-white/[0.08]" />
-                <span className="font-mono text-[var(--text-secondary)] text-xs">⏱ {formatTime(elapsed)}</span>
+                <div className="w-px h-4 bg-white/[0.08]" aria-hidden="true" />
+                <span className="font-mono text-[var(--text-secondary)] text-xs" aria-label={`Timer: ${formatTime(elapsed)}`} role="timer">⏱ {formatTime(elapsed)}</span>
 
                 {/* Presence */}
-                <div className="flex items-center gap-1.5 ml-2">
+                <div className="flex items-center gap-1.5 ml-2" aria-label="Participants" role="group">
                     {participants.map((pUser) => {
                         const displayName = pUser.name || (pUser.id === user?.id ? "Me" : pUser.role);
                         return (
@@ -81,11 +82,14 @@ const TopBar = ({
                     <button
                         onClick={() => isInterviewer && setShowProblemPicker(!showProblemPicker)}
                         className="btn btn-secondary btn-sm"
+                        aria-label={`Current problem: ${problem}${isInterviewer ? ". Click to change" : ""}`}
+                        aria-expanded={showProblemPicker}
+                        aria-haspopup="listbox"
                     >
                         📋 {problem}
                     </button>
                     {showProblemPicker && isInterviewer && (
-                        <div className="absolute top-10 left-1/2 -translate-x-1/2 bg-[var(--bg-surface)] border border-white/[0.08] rounded-xl overflow-hidden z-50 w-64 max-h-60 overflow-y-auto shadow-xl shadow-black/40">
+                        <div className="absolute top-10 left-1/2 -translate-x-1/2 bg-[var(--bg-surface)] border border-white/[0.08] rounded-xl overflow-hidden z-50 w-64 max-h-60 overflow-y-auto shadow-xl shadow-black/40" role="listbox" aria-label="Select a problem">
                             {problems.map((p) => (
                                 <button
                                     key={p.id}
@@ -106,6 +110,8 @@ const TopBar = ({
                         className={`btn btn-sm ${
                             showDescription ? "btn-primary" : "btn-secondary"
                         }`}
+                        aria-label={showDescription ? "Hide problem description" : "Show problem description"}
+                        aria-pressed={showDescription}
                     >
                         📖 Description
                     </button>

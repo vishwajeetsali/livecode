@@ -1,23 +1,24 @@
 import { describe, it, expect } from "vitest";
-import authReducer, { setCredentials, logout } from "../features/auth/authSlice";
+import authReducer, { setCredentials, setBaseRole, resetToBaseRole, logout } from "../features/auth/authSlice";
 
 describe("authSlice Redux Reducer", () => {
     const initialState = {
         user: null,
         accessToken: null,
         isAuthenticated: false,
+        baseRole: null,
     };
 
     it("should handle initial state", () => {
         expect(authReducer(undefined, { type: "unknown" })).toEqual(initialState);
     });
 
-    it("should handle setCredentials", () => {
+    it("should handle setCredentials and initialize baseRole if empty", () => {
         const userPayload = {
             id: "user-1",
             name: "John Doe",
             email: "john@example.com",
-            role: "INTERVIEWER" as const,
+            role: "CANDIDATE" as const,
         };
 
         const state = authReducer(initialState, setCredentials({
@@ -28,6 +29,37 @@ describe("authSlice Redux Reducer", () => {
         expect(state.isAuthenticated).toBe(true);
         expect(state.accessToken).toBe("mock_token_abc");
         expect(state.user).toEqual(userPayload);
+        expect(state.baseRole).toBe("CANDIDATE");
+    });
+
+    it("should handle setBaseRole", () => {
+        const userPayload = {
+            id: "user-1",
+            name: "John Doe",
+            email: "john@example.com",
+            role: "INTERVIEWER" as const,
+        };
+
+        const state = authReducer(initialState, setBaseRole({
+            user: userPayload,
+            accessToken: "token_interviewer",
+        }));
+
+        expect(state.baseRole).toBe("INTERVIEWER");
+        expect(state.user?.role).toBe("INTERVIEWER");
+    });
+
+    it("should handle resetToBaseRole after session-scoped role change", () => {
+        const sessionState = {
+            user: { id: "user-1", name: "John", email: "john@example.com", role: "INTERVIEWER" as const },
+            accessToken: "session_token",
+            isAuthenticated: true,
+            baseRole: "CANDIDATE" as const,
+        };
+
+        const state = authReducer(sessionState, resetToBaseRole());
+        expect(state.user?.role).toBe("CANDIDATE");
+        expect(state.baseRole).toBe("CANDIDATE");
     });
 
     it("should handle logout", () => {
@@ -35,11 +67,14 @@ describe("authSlice Redux Reducer", () => {
             user: { id: "user-1", name: "John", email: "john@example.com", role: "CANDIDATE" as const },
             accessToken: "token_123",
             isAuthenticated: true,
+            baseRole: "CANDIDATE" as const,
         };
 
         const state = authReducer(loggedInState, logout());
         expect(state.isAuthenticated).toBe(false);
         expect(state.accessToken).toBeNull();
         expect(state.user).toBeNull();
+        expect(state.baseRole).toBeNull();
     });
 });
+

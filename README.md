@@ -166,3 +166,59 @@ npm test
 | `GET` | `/api/v1/problems` | List custom problem bank | Yes |
 | `POST` | `/api/v1/problems/create` | Add problem to bank (INTERVIEWER only) | Yes (RBAC) |
 | `DELETE` | `/api/v1/problems/:id` | Delete problem from bank (INTERVIEWER only) | Yes (RBAC) |
+
+---
+
+## 🌐 Production Deployment Guide (Free Tier)
+
+This project is optimized for 100% free deployment across **Vercel** (Frontend), **Render** (Backend), and **Neon** (PostgreSQL).
+
+### Step 1: Database (Neon PostgreSQL)
+1. Sign up for a free PostgreSQL database on [Neon.tech](https://neon.tech).
+2. Copy your pooled connection string:
+   ```
+   postgresql://user:password@ep-xyz-pooler.neon.tech/neondb?sslmode=require
+   ```
+3. Run migrations directly to the cloud database:
+   ```bash
+   DATABASE_URL="<your-neon-database-url>" npx prisma migrate deploy
+   ```
+
+### Step 2: Backend Deployment (Render)
+1. Push your repository to GitHub.
+2. In Render Dashboard, click **New +** -> **Web Service** and connect your GitHub repo.
+3. Configure the service settings:
+   - **Root Directory:** `server` (or leave blank if repository root with `cd server` in commands)
+   - **Environment:** `Node`
+   - **Build Command:** `cd server && npm install && npm run build`
+   - **Start Command:** `cd server && npm start`
+4. Add Environment Variables in Render:
+   - `NODE_ENV`: `production`
+   - `PORT`: `5000`
+   - `DATABASE_URL`: `<your-neon-database-url>`
+   - `CLIENT_URL`: `https://<your-client-subdomain>.vercel.app`
+   - `SERVER_URL`: `https://<your-backend-subdomain>.onrender.com`
+   - `JWT_ACCESS_SECRET`: `<generated-random-32-char-string>`
+   - `JWT_REFRESH_SECRET`: `<generated-random-32-char-string>`
+   - `GOOGLE_CLIENT_ID`: `<your-google-oauth-client-id>`
+   - `GOOGLE_CLIENT_SECRET`: `<your-google-oauth-client-secret>`
+   - `GROQ_API_KEY`: `<your-groq-api-key>`
+   - `JUDGE0_URL`: `https://judge0-ce.p.rapidapi.com` (or self-hosted Judge0 instance)
+
+### Step 3: Google Cloud OAuth 2.0 Credentials
+1. In the [Google Cloud Console](https://console.cloud.google.com/), navigate to **APIs & Services > Credentials**.
+2. Under **Authorized JavaScript Origins**, add:
+   - `https://<your-client-subdomain>.vercel.app`
+3. Under **Authorized Redirect URIs**, add:
+   - `https://<your-backend-subdomain>.onrender.com/api/v1/auth/google/callback`
+   - `https://<your-backend-subdomain>.onrender.com/api/auth/google/callback`
+
+### Step 4: Frontend Deployment (Vercel)
+1. In Vercel Dashboard, click **Add New...** -> **Project** and import your GitHub repo.
+2. Set **Root Directory** to `client`.
+3. Add Environment Variables in Vercel:
+   - `VITE_API_URL`: `https://<your-backend-subdomain>.onrender.com`
+   - `VITE_SOCKET_URL`: `https://<your-backend-subdomain>.onrender.com`
+   - *(Optional TURN)*: `VITE_TURN_URL`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL` (from Metered.ca free tier)
+4. Click **Deploy**.
+

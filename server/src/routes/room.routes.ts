@@ -1,5 +1,6 @@
 import express from "express";
 import { verifyToken } from "../middleware/auth.middleware.js";
+import { requireRole } from "../middleware/authorize.js";
 import { createRoom, getRoom, joinRoom, endSession, setRoomProblem } from "../controllers/room.controller.js";
 import { validate } from "../middleware/validate.js";
 import { createRoomSchema, joinRoomSchema, setRoomProblemSchema, endSessionSchema } from "../middleware/schemas.js";

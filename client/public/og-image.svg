@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <rect width="1200" height="630" fill="#0A0A0F"/>
+  <circle cx="950" cy="150" r="300" fill="#22C55E" fill-opacity="0.08" filter="blur(80px)"/>
+  <circle cx="200" cy="480" r="280" fill="#6366F1" fill-opacity="0.08" filter="blur(80px)"/>
+  
+  <!-- Subtle Grid -->
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#FFFFFF" stroke-opacity="0.03" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="630" fill="url(#grid)" />
+
+  <!-- Logo Mark -->
+  <g transform="translate(100, 120)">
+    <rect width="56" height="56" rx="14" fill="#22C55E" fill-opacity="0.15" stroke="#22C55E" stroke-opacity="0.4" stroke-width="1.5"/>
+    <path d="M22 18L13 28L22 38M34 18L43 28L34 38" stroke="#22C55E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="76" y="38" fill="#FFFFFF" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="900" letter-spacing="-0.03em">LiveCode<tspan fill="#22C55E">.</tspan></text>
+  </g>
+
+  <!-- Tagline / Heading -->
+  <g transform="translate(100, 240)">
+    <rect width="190" height="32" rx="16" fill="#22C55E" fill-opacity="0.1" stroke="#22C55E" stroke-opacity="0.3"/>
+    <text x="16" y="21" fill="#4ADE80" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="700" letter-spacing="0.1em">PRODUCTION READY</text>
+
+    <text x="0" y="80" fill="#FFFFFF" font-family="system-ui, -apple-system, sans-serif" font-size="54" font-weight="900" letter-spacing="-0.03em">AI-Powered Technical</text>
+    <text x="0" y="145" fill="#FFFFFF" font-family="system-ui, -apple-system, sans-serif" font-size="54" font-weight="900" letter-spacing="-0.03em">Interview Platform<tspan fill="#22C55E">.</tspan></text>
+
+    <text x="0" y="200" fill="#94A3B8" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="400">Real-time collaborative coding, WebRTC video, AI hint assistance,</text>
+    <text x="0" y="230" fill="#94A3B8" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="400">and automated senior engineering evaluation reports.</text>
+  </g>
+
+  <!-- Feature Pills -->
+  <g transform="translate(100, 520)">
+    <!-- Pill 1 -->
+    <rect x="0" y="0" width="180" height="42" rx="12" fill="#181824" stroke="#FFFFFF" stroke-opacity="0.08"/>
+    <text x="20" y="26" fill="#E2E8F0" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">⚡ Yjs Collaboration</text>
+    
+    <!-- Pill 2 -->
+    <rect x="200" y="0" width="170" height="42" rx="12" fill="#181824" stroke="#FFFFFF" stroke-opacity="0.08"/>
+    <text x="220" y="26" fill="#E2E8F0" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">🎥 WebRTC Video</text>
+
+    <!-- Pill 3 -->
+    <rect x="390" y="0" width="170" height="42" rx="12" fill="#181824" stroke="#FFFFFF" stroke-opacity="0.08"/>
+    <text x="410" y="26" fill="#E2E8F0" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">🤖 AI Evaluations</text>
+
+    <!-- Pill 4 -->
+    <rect x="580" y="0" width="180" height="42" rx="12" fill="#181824" stroke="#FFFFFF" stroke-opacity="0.08"/>
+    <text x="600" y="26" fill="#E2E8F0" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">▶️ Judge0 Sandbox</text>
+  </g>
+</svg>

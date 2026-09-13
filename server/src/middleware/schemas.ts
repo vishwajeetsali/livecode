@@ -25,12 +25,18 @@ export const executeCodeSchema = z.object({
     code: z.string().min(1, "code is required"),
     languageId: z.number().int().positive(),
     stdin: z.string().default(""),
+    problemTitle: z.string().optional(),
+    examples: z.array(z.object({
+        input: z.any(),
+        output: z.any(),
+    })).optional(),
 });
 
 // ─── AI Hint ─────────────────────────────────────────────────────────────────
 export const aiHintSchema = z.object({
     code: z.string().min(1, "code is required"),
     problem: z.string().min(1, "problem is required"),
+    isMock: z.boolean().optional(),
 });
 
 // ─── Mock ─────────────────────────────────────────────────────────────────────
@@ -54,9 +60,9 @@ export const generateReportSchema = z.object({
 
 // ─── Problems (CRUD) ─────────────────────────────────────────────────────────
 export const createProblemSchema = z.object({
-    title: z.string().min(1, "title is required").max(200),
+    title: z.string().trim().min(1, "title is required").max(200),
     difficulty: z.enum(["EASY", "MEDIUM", "HARD"]),
-    description: z.string().min(1, "description is required"),
+    description: z.string().trim().min(1, "description is required"),
     examples: z
         .array(
             z.object({
@@ -67,3 +73,15 @@ export const createProblemSchema = z.object({
         .default([]),
     constraints: z.array(z.string()).default([]),
 });
+
+// ─── AI Code Review ──────────────────────────────────────────────────────
+export const reviewCodeSchema = z.object({
+    code: z.string().min(1, "code is required").max(50000, "code too large"),
+    problem: z.string().max(500).default("Coding Problem"),
+    language: z.string().max(50).default("javascript"),
+});
+
+export const mockStartSchema = z.object({
+    role: z.string().max(100).optional(),
+    difficulty: z.enum(["EASY", "MEDIUM", "HARD"]).optional(),
+}).optional().default({});

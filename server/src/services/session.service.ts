@@ -2,7 +2,8 @@ import { prisma } from "../lib/prisma.js";
 
 export const SessionService = {
     async getUserSessions(userId: string, cursor?: string, limit = 10) {
-        const take = Math.min(Math.max(limit, 1), 50);
+        const safeLimit = typeof limit === "number" && !isNaN(limit) ? limit : 10;
+        const take = Math.min(Math.max(safeLimit, 1), 50);
 
         const sessions = await prisma.session.findMany({
             where: { userId },
@@ -14,8 +15,8 @@ export const SessionService = {
 
         let nextCursor: string | null = null;
         if (sessions.length > take) {
-            const nextItem = sessions.pop();
-            nextCursor = nextItem?.id || null;
+            sessions.pop();
+            nextCursor = sessions[sessions.length - 1]?.id || null;
         }
 
         return {

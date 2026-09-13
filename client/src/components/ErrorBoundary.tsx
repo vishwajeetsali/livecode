@@ -1,4 +1,4 @@
-import React, { Component, type ErrorInfo, type ReactNode } from "react";
+import { Component, type ErrorInfo, type ReactNode } from "react";
 
 interface Props {
     children: ReactNode;
@@ -20,7 +20,7 @@ export class ErrorBoundary extends Component<Props, State> {
     }
 
     public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-        console.error("Uncaught error:", error, errorInfo);
+        if (import.meta.env.DEV) console.error("Uncaught error:", error, errorInfo);
     }
 
     private handleReset = () => {
@@ -40,7 +40,7 @@ export class ErrorBoundary extends Component<Props, State> {
                         <p className="text-[var(--text-muted)] text-sm mb-6 leading-relaxed">
                             An unexpected application error occurred. We have logged the details.
                         </p>
-                        {this.state.error && (
+                        {import.meta.env.DEV && this.state.error && (
                             <div className="bg-black/40 border border-white/[0.06] rounded-xl p-4 mb-6 text-left overflow-x-auto max-h-40 font-mono text-xs text-red-300">
                                 {this.state.error.toString()}
                             </div>
