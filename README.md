@@ -98,7 +98,7 @@ livecode/
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/your-username/livecode.git
+git clone https://github.com/vishwajeetsali/livecode.git
 cd livecode
 ```
 
@@ -132,7 +132,7 @@ OpenAPI 3.0 API documentation is available at `http://localhost:5000/api/v1/docs
 
 ## 🧪 Testing
 
-The repository features 25 automated unit tests across frontend and backend powered by Vitest.
+The repository features 193 automated unit tests across frontend and backend powered by Vitest.
 
 ### Backend Tests
 ```bash
