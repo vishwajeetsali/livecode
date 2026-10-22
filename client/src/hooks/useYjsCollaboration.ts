@@ -4,8 +4,11 @@ import { MonacoBinding } from "y-monaco";
 import { WebsocketProvider } from "y-websocket";
 import type * as monaco from "monaco-editor";
 
-const BASE_WS_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000")
-    .replace(/^http/, "ws");
+const BASE_WS_URL = import.meta.env.VITE_API_URL
+    ? import.meta.env.VITE_API_URL.replace(/^http/, "ws")
+    : (typeof window !== "undefined"
+        ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`
+        : "ws://localhost:5000");
 
 interface UseYjsCollaborationOptions {
     roomId: string | undefined;

@@ -1,9 +1,9 @@
 import { io } from "socket.io-client";
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : "/api";
 
-const socket = io(import.meta.env.VITE_SOCKET_URL || "http://localhost:5000", {
+const socket = io(import.meta.env.VITE_SOCKET_URL || undefined, {
     autoConnect: false,
     auth: async (cb) => {
         let token = localStorage.getItem("accessToken");
@@ -16,7 +16,7 @@ const socket = io(import.meta.env.VITE_SOCKET_URL || "http://localhost:5000", {
                     const payload = JSON.parse(atob(parts[1]));
                     if (payload.exp && payload.exp * 1000 < Date.now()) {
                         const res = await axios.post(
-                            `${API_URL}/api/auth/refresh`,
+                            `${API_BASE}/auth/refresh`,
                             { currentRole: payload.role },
                             { withCredentials: true }
                         );

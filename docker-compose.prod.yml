@@ -1,0 +1,18 @@
+services:
+  server:
+    image: ghcr.io/vishwajeetsali/livecode-server:latest
+    container_name: livecode-server
+    restart: unless-stopped
+    env_file:
+      - .env
+    expose:
+      - "5000"
+
+  client:
+    image: ghcr.io/vishwajeetsali/livecode-client:latest
+    container_name: livecode-client
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - server
