@@ -4,15 +4,19 @@ import { AuthService } from "../services/auth.service.js";
 import { env } from "../config/env.js";
 import { BadRequestError } from "../errors/AppError.js";
 
+const isSecureRequest = (req: Request) => {
+    return req.secure || req.headers["x-forwarded-proto"] === "https";
+};
+
 export const googleCallback = async (req: Request, res: Response) => {
     const user = req.user as { id: string; isNewUser?: boolean };
     const result = await AuthService.handleGoogleCallback(user.id, user.isNewUser ?? false);
 
-    const isProd = env.NODE_ENV === "production";
+    const isSecure = isSecureRequest(req);
     res.cookie("refreshToken", result.refreshToken, {
         httpOnly: true,
-        secure: isProd,
-        sameSite: isProd ? "none" : "lax",
+        secure: isSecure,
+        sameSite: isSecure ? "none" : "lax",
         path: "/",
         maxAge: 7 * 24 * 60 * 60 * 1000,
     });
@@ -44,11 +48,11 @@ export const refreshToken = async (req: Request, res: Response) => {
     const result = await AuthService.refreshAccessToken(token, currentRole);
 
     // Set the rotated refresh token cookie
-    const isProd = env.NODE_ENV === "production";
+    const isSecure = isSecureRequest(req);
     res.cookie("refreshToken", result.refreshToken, {
         httpOnly: true,
-        secure: isProd,
-        sameSite: isProd ? "none" : "lax",
+        secure: isSecure,
+        sameSite: isSecure ? "none" : "lax",
         path: "/",
         maxAge: 7 * 24 * 60 * 60 * 1000,
     });
@@ -59,11 +63,11 @@ export const refreshToken = async (req: Request, res: Response) => {
 export const logout = async (req: Request, res: Response) => {
     const token = req.cookies.refreshToken;
     await AuthService.logout(token);
-    const isProd = env.NODE_ENV === "production";
+    const isSecure = isSecureRequest(req);
     res.clearCookie("refreshToken", {
         httpOnly: true,
-        secure: isProd,
-        sameSite: isProd ? "none" : "lax",
+        secure: isSecure,
+        sameSite: isSecure ? "none" : "lax",
         path: "/",
     });
     res.json({ success: true, data: { message: "logged out" } });

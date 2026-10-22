@@ -29,6 +29,7 @@ import { errorHandler } from "./middleware/errorHandler.js";
 import { logger } from "./utils/logger.js";
 
 const app = express();
+app.set("trust proxy", 1);
 const PORT = env.PORT;
 
 // ─── Security ────────────────────────────────────────────────────────────────
@@ -135,4 +136,4 @@ server.listen(PORT, async () => {
     } catch (err: any) {
         logger.error("Failed to seed database", { error: err?.message || err });
     }
-});
+});

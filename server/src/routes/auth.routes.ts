@@ -7,14 +7,18 @@ import { env } from "../config/env.js";
 
 const router = express.Router();
 
+const isSecureRequest = (req: express.Request) => {
+    return req.secure || req.headers["x-forwarded-proto"] === "https";
+};
+
 // start google login
 router.get("/google", (req, res, next) => {
     const state = crypto.randomBytes(32).toString("hex");
-    const isProd = env.NODE_ENV === "production";
+    const isSecure = isSecureRequest(req);
     res.cookie("oauth_state", state, {
         httpOnly: true,
-        secure: isProd,
-        sameSite: isProd ? "none" : "lax",
+        secure: isSecure,
+        sameSite: isSecure ? "none" : "lax",
         path: "/",
         maxAge: 10 * 60 * 1000, // 10 minutes
     });
@@ -32,11 +36,11 @@ router.get("/google/callback",
         if (!queryState || !cookieState || queryState !== cookieState) {
             return res.redirect(`${env.CLIENT_URL}/?error=invalid_csrf_state`);
         }
-        const isProd = env.NODE_ENV === "production";
+        const isSecure = isSecureRequest(req);
         res.clearCookie("oauth_state", {
             httpOnly: true,
-            secure: isProd,
-            sameSite: isProd ? "none" : "lax",
+            secure: isSecure,
+            sameSite: isSecure ? "none" : "lax",
             path: "/",
         });
         next();
@@ -51,4 +55,3 @@ router.post("/refresh", refreshToken);
 router.post("/logout", logout);
 
 export default router;
-
