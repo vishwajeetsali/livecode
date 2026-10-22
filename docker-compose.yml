@@ -1,0 +1,24 @@
+services:
+  # Service 1: The Backend API
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: livecode-server
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./server/.env
+    restart: unless-stopped
+
+  # Service 2: The Frontend Client
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: livecode-client
+    ports:
+      - "3000:80"
+    depends_on:
+      - server
+    restart: unless-stopped

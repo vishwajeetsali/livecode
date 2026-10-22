@@ -1,0 +1,67 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─── Job 1: Validate Backend ───────────────────────────────────────
+  server-ci:
+    name: Backend Tests & Build Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run server unit tests (Vitest)
+        run: npm run test
+
+      - name: Check build & Prisma generation
+        run: DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder" npm run build
+
+  # ─── Job 2: Validate Frontend ──────────────────────────────────────
+  client-ci:
+    name: Frontend Lint, Tests & Build Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run client unit tests (Vitest)
+        run: npm run test
+
+      - name: Test production Vite build
+        run: npm run build
