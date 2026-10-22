@@ -37,7 +37,7 @@ const Landing = () => {
                 {/* CTA */}
                 <div className="flex gap-4" role="group" aria-label="Get started">
                     <a
-                        href={`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/auth/google`}
+                        href={`${import.meta.env.VITE_API_URL || ""}/api/auth/google`}
                         className="btn btn-primary btn-lg no-underline"
                         role="button"
                         aria-label="Start Free"

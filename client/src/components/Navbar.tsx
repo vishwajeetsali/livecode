@@ -172,7 +172,7 @@ const Navbar = () => {
                 <div className="flex items-center gap-2">
                     <ThemeToggle />
                     <a
-                        href={`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/auth/google`}
+                        href={`${import.meta.env.VITE_API_URL || ""}/api/auth/google`}
                         className="btn btn-primary btn-sm no-underline"
                         role="button"
                         aria-label="Sign in with Google"
